@@ -159,13 +159,15 @@ thyroid_randF_preds$ThryroidClass <-
 log_confusion_matrix <- 
   ConfusionTableR::binary_class_cm(
     train_labels = thyroid_log_preds$ThryroidClass,
-    truth_labels = thyroid_log_preds$.pred_class
+    truth_labels = thyroid_log_preds$.pred_class,
+    positive = "sick"
   )
 
 randF_confusion_matrix <- 
   ConfusionTableR::binary_class_cm(
     train_labels = thyroid_randF_preds$ThryroidClass,
-    truth_labels = thyroid_randF_preds$.pred_class
+    truth_labels = thyroid_randF_preds$.pred_class,
+    positive = "sick"
   )
 ```
 ```{r}

@@ -1,0 +1,162 @@
+---
+title: "MLDataR_tutorial_YT_Hutson"
+author: "ASG"
+date: "1/18/2022"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## libraries
+```{r}
+library(MLDataR)
+library(ConfusionTableR)
+library(dplyr)
+library(tidymodels)
+```
+
+# pre-processing data
+## thyroid_df
+Creating a dataframe of the thyroid disease dataset
+
+```{r}
+thyroid_df <- MLDataR::thyroid_disease
+```
+
+
+The aim is to train a supervised learning model to predict whether the patient is sick or not. So, we convert the outcome variable 'ThryroidClass' into a factor. We also remove the uninformative variable ref_src. Note "ThryroidClass" incorrect spelling of thyroid in original data set.
+
+```{r}
+thyroid_df$ThryroidClass <- as.factor(thyroid_df$ThryroidClass)
+thyroid_df <- thyroid_df %>% select(-ref_src)
+```
+
+## selecting for patients with all variables reported
+```{r}
+thyroid_df <- thyroid_df[complete.cases(thyroid_df), ] # selecting complete rows; see documentation for complete.cases function
+```
+
+## Splitting the data into training and testing datasets
+```{r}
+set.seed(1)
+split_data <- 
+  rsample::initial_split(
+  thyroid_df,prop = 2/3
+  )
+thyroid_training_set <- training(split_data)
+thyroid_test_set <- testing(split_data)
+```
+
+Setting a seed makes analysis reproducible by generating the same splits every time.
+
+### accessing the training and the test data sets
+```{r}
+glimpse(thyroid_training_set)
+glimpse(thyroid_test_set)
+```
+
+To note: all variables are numeric (dbl) except the ThryroidClass variable which is a factor. This is useful and we can normalize the numeric predictors to a mean of zero and an SD of one. This eliminates outsize influence of outliers.
+
+## Specifying a recipe with predictors, outcomes and pre-processing steps
+```{r}
+thyroid_recipe <- 
+  recipe(thyroid_training_set,ThryroidClass ~ .) %>%
+  step_normalize(all_predictors()) %>% 
+  step_zv(all_predictors()) # to check in tidymodels
+```
+ Checking the recipe
+```{r}
+thyroid_recipe
+```
+ 
+## specifying models & engines
+
+Unlike Gary Hutson & following Karandeep Singh tutorial, we don't set seed again in the following step (Hutson sets seed again)
+
+```{r}
+logistic_model <- parsnip::logistic_reg() %>% 
+  set_engine("glm") %>% 
+  set_mode("classification")
+
+# specifying a second model
+rand_forest_model <- parsnip::rand_forest() %>% 
+  set_engine("ranger") %>% 
+  # ensure ranger package is installed but do not "library' in
+  set_mode("classification")
+```
+
+## package the recipe into workflows
+```{r}
+logistic_workflow <- 
+  workflow() %>% 
+  add_recipe(thyroid_recipe) %>% 
+  add_model(logistic_model)
+
+# another workflow for the random forest model
+rand_forest_workflow <- 
+  workflow() %>% 
+  add_recipe(thyroid_recipe) %>% 
+  add_model(rand_forest_model)
+```
+
+```{r}
+# checking the workflows
+logistic_workflow
+rand_forest_workflow
+```
+
+## train the logistic model on the training set, predict & measure performance on the test set
+```{r}
+logistic_results <- 
+  last_fit(logistic_workflow,
+           split = split_data,
+           metrics = metric_set(roc_auc,
+                                pr_auc,
+                                accuracy,
+                                kap)
+           )
+```
+ The last_fit function accomplishes 3 things: trains the model, runs the model on the test set and measures the performance of the predictions by the model using the metrics listed. 
+ 
+ After having trained the model and run predictions on the test set, we collect those predictions and take a look at them 
+ 
+### collecting and glimpsing at the predictions for the test data
+```{r}
+logistic_results %>% 
+  collect_predictions() %>% 
+  glimpse()
+```
+
+### collecting and looking at the metrics for the predictions
+```{r}
+logistic_results %>% 
+  collect_metrics()
+```
+
+## training the random_forest model on the data & predicting test data
+```{r}
+rand_forest_results <- 
+  last_fit(rand_forest_workflow,
+           split = split_data,
+           metrics = metric_set(roc_auc,
+                                pr_auc,
+                                accuracy,
+                                kap)
+           )
+```
+
+### collecting and looking at the predictions from the rand_forest
+```{r}
+rand_forest_results %>% 
+  collect_predictions() %>% 
+  glimpse()
+```
+
+### collecting and looking at the rand_forest metrics
+```{r}
+rand_forest_results %>% 
+  collect_metrics()
+```
+We see that the random forest model is more accurate (0.98 versus 0.96).
